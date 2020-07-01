@@ -3,11 +3,14 @@
 import sys
 import math
 
+aspect_ratio = 16/9
+
 games = {
     'source': 0.022,
-    'ow': 0.0066,
-    'valorant': 0.07,
-    'aimpro': 360 / (1000 * 2 * math.pi),
+    #'valorant': 0.07,
+    #'ow': 0.0066,
+    #'roblox': 0.36,
+    #'aimpro': 360 / (1000 * 2 * math.pi),
 }
 
 def cm_to_sens(cm, dpi, fov, game):
@@ -24,27 +27,49 @@ def md_ratio(fov1, fov2, r):
 def fov_aspect_ratio(fov, a, b):
     return 2 * math.degrees(math.atan(b * math.tan(math.radians(fov)/2) / a))
 
+def parse_dpi(dpi):
+    try:
+        return int(dpi)
+    except ValueError:
+        print("Invalid dpi input, could not convert to number")
+        exit()
+
+def parse_sens(type, sens, dpi):
+    try:
+        if sys.argv[1] != 'cm':
+            return float(cm_to_sens(float(sens), dpi, 0, type))
+        return float(sens)
+    except KeyError:
+        print("Invalid game provided, try one of the following:")
+        print(list(games.keys()))
+        exit()
+    except ValueError:
+        print("Invalid sens input, could not convert to number")
+        exit()
+
+def parse_fov(fov):
+    try:
+        if fov[-1] == 'v':
+            return fov_aspect_ratio(float(fov[:-1]), 1, aspect_ratio)
+        elif fov[-1] == 's':
+            return fov_aspect_ratio(float(fov[:-1]), 4/3, aspect_ratio)
+        return float(fov)
+    except ValueError:
+        print("Invalid fov input, could not convert to number")
+        exit()
+
 def read_input():
     argc = len(sys.argv)
     if argc < 5:
-        print("Usage: ./0mm <cm|source> <sens> <dpi> <fov> [optional fovs]")
+        print("Usage: ./0mm <cm|game> <sens> <dpi> <fov>[v,s] [optional fovs]")
         exit()
 
-    dpi = int(sys.argv[3])
-    base_cm = float(cm_to_sens(float(sys.argv[2]), dpi, 0, sys.argv[1]) if sys.argv[1] != 'cm' else sys.argv[2])
-    base_fov = float(sys.argv[4]) 
+    dpi = parse_dpi(sys.argv[3])
+    base_cm = parse_sens(sys.argv[1], sys.argv[2], dpi)
+    base_fov = parse_fov(sys.argv[4])
+
     fovs = [base_fov]
-    fovs += [float(sys.argv[i]) for i in range(5, argc)]
-
-    # default fovs to convert to
-    if len(fovs) == 1:
-        for f in range(70, 131, 5):
-            fovs.append(f)
-
-        fovs.append(103)
-        fovs.append(fov_aspect_ratio(90, 3, 4)) # csgo
-        fovs.append(fov_aspect_ratio(110, 3, 4)) # 124.blahblah for solo
-
+    fovs += [parse_fov(sys.argv[i]) for i in range(5, argc)]
     fovs = list(set(fovs))
     fovs.sort()
 
@@ -53,21 +78,24 @@ def read_input():
 def conversions(dpi, base_cm, base_fov, fovs):
     convs = {
         'hfov': fovs,
+        #'vfov': [fov_aspect_ratio(f, aspect_ratio, 1) for f in fovs],
+        #'sfov': [fov_aspect_ratio(f, aspect_ratio, 4/3) for f in fovs],
         'cm': [base_cm * zoom_ratio(base_fov, fov) for fov in fovs],
+        #'cm': [base_cm * md_ratio(base_fov, fov, 1) for fov in fovs],
     }
 
     for game in games:
         convs[game] = [cm_to_sens(convs['cm'][i], dpi, convs['hfov'][i], game) for i in range(len(convs['cm']))]
-
-    # precision
-    for arr in convs:
-        convs[arr] = list(map(lambda x: round(x, 4), convs[arr]))
-        m = max(list(map(lambda x: len(str(x)), convs[arr])))
-        convs[arr] = convs[arr], max(len(arr), m)
-
+    
     return convs
 
 def formatted_print(convs):
+    # precision
+    for arr in convs:
+        convs[arr] = list(map(lambda x: round(x, 3), convs[arr]))
+        m = max(list(map(lambda x: len(str(x)), convs[arr])))
+        convs[arr] = convs[arr], max(len(arr), m)
+    
     # header
     print('')
     ttls = [ttl.ljust(convs[ttl][1]) for ttl in convs]
